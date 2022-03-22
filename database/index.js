@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
-mongoose.connect('mongodb://localhost/fetcher');
+mongoose.connect('mongodb://localhost/fetcher', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
 
 let repoSchema = mongoose.Schema({
   ownerID: Number,
@@ -13,31 +16,44 @@ let repoSchema = mongoose.Schema({
 let Repo = mongoose.model('Repo', repoSchema);
 
 
-let save = (arrayOfRepoObjects, callback) => {
+let save = (err, data) => {
 
-  // Check if username exists in MongoDB
-  var searchForUser = Repo.findOne({ login: username });
+  if (err) {
+    console.log('Error in axios get request to GitHub API');
+  } else {
 
-  // Remove all repos from user if they exist
-  if (searchForUser.length) {
-    Repo.deleteMany({ login: username })
-  };
-
-  // Create new array of repo documents
-  var formattedRepoObjs = arrayOfRepoObjects.map( obj => {
-    return new Repo( {
-      ownerID: obj.owner.id,
-      id: obj.id,
-      login: obj.owner.login,
-      repo_name: obj.name,
-      stargazers_count: obj.stargazers_count,
-      html_url: obj.owner.html_url
+    // Create new array of repo documents
+    var formattedRepoObjs = data.map( obj => {
+      return new Repo( {
+        ownerID: obj.owner.id,
+        id: obj.id,
+        login: obj.owner.login,
+        repo_name: obj.name,
+        stargazers_count: obj.stargazers_count,
+        html_url: obj.owner.html_url
+      })
     })
-  })
 
-  // Pass formatted array of repoObjs into insertMany() and populate DB
-  Repo.insertMany(formattedRepoObjs)
+  // Get username from incoming GITHUB API request
+  var username = data[0].owner.login;
 
+  Repo.find({login: username})
+    .then(() => {
+      Repo.deleteMany({login: username})
+      .then(() => {
+        Repo.insertMany(formattedRepoObjs)
+        .then(() => {
+          Repo.find({login: username}, (err, res) => {
+            console.log(res, "EEEEEEEE")
+          });
+        })
+      })
+    })
+    .catch( error => {
+      console.log('CATCH ERROR')
+    })
+  }
 };
+
 
 module.exports.save = save;
